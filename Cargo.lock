@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "syx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "hex",
@@ -270,9 +270,9 @@ dependencies = [
 
 [[package]]
 name = "syxpack"
-version = "0.12.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c01a0dacdb393153363665f5a5156dd6becf4adc86d99b7cdd0286b4d7fc095d"
+checksum = "fe0e968b8d067ceb8c35f856b8791a4d1940786e38c5125cc1011b48df4f4ce8"
 dependencies = [
  "bit",
  "hex",

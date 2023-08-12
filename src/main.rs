@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
-use syxpack::{Message, message_count, split_messages, read_file};
+use syxpack::{Message, message_count, split_messages, read_file, Manufacturer, find_manufacturer};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -48,9 +48,21 @@ enum Commands {
 
     // Receive SysEx messages from stdin in the ReceiveMIDI format.
     Receive {
+    },
+
+    // Makes a manufacturer-specific SysEx message for the given manufacturer,
+    // with the specified payload.
+    Make {
+        #[arg(short, long)]
+        manufacturer: String,  // either hex ID or name
+
+        #[arg(short, long)]
+        payload: String, // hex string (or maybe later @filename)
+
+        #[arg(short, long)]
+        outfile: PathBuf,  // name of output file
     }
 }
-
 
 fn main() {
     let cli = Cli::parse();
@@ -278,6 +290,71 @@ fn main() {
                     Err(e) => {
                         eprintln!("{}", e);
                         std::process::exit(1);
+                    }
+                }
+            }
+        }
+
+        Commands::Make { manufacturer, payload, outfile } => {
+            match manufacturer.chars().nth(0).unwrap() {
+                '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' => {
+                    if manufacturer.starts_with("00") {  // must be an extended identifier
+                        if manufacturer.len() != 6 {
+                            eprintln!("Extended manufacturer ID must have six digits, like '002109'");
+                            std::process::exit(1);
+                        }
+                    }
+                    else {
+                        if manufacturer.len() != 2 {
+                            eprintln!("Standard manufacturer ID must have two digits, like '42'");
+                            std::process::exit(1);
+                        }
+                    }
+
+                    // Now we have a string of potential hex digits, length 2 or 6.
+                    // Try to split it into a vector, so that we can make a SysEx message.
+                    match hex::decode(manufacturer) {
+                        Ok(manuf_bytes) => {
+                            let manuf = Manufacturer::new(manuf_bytes).unwrap();
+
+                            match hex::decode(payload) {
+                                Ok(payload_bytes) => {
+                                    let message = Message::ManufacturerSpecific { manufacturer: manuf, payload: payload_bytes };
+                                    let mut f = fs::File::create(&outfile).expect("create file");
+                                    f.write_all(&message.to_bytes()).expect("write to output file");
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            std::process::exit(1);
+                        }
+                    }
+
+                }
+                _ => {  // ordinary text string, possibly a manufacturer name (or the start of one)
+                    match find_manufacturer(&manufacturer) {
+                        Ok(manuf) => {
+                            match hex::decode(payload) {
+                                Ok(payload_bytes) => {
+                                    let message = Message::ManufacturerSpecific { manufacturer: manuf, payload: payload_bytes };
+                                    let mut f = fs::File::create(&outfile).expect("create file");
+                                    f.write_all(&message.to_bytes()).expect("write to output file");
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{:?}", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             }
