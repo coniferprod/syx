@@ -1,10 +1,26 @@
-use std::path::{Path, PathBuf};
+use std::path::{
+    Path, 
+    PathBuf
+};
 use std::fs;
 use std::io::Write;
 use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
-use syxpack::{Message, message_count, split_messages, read_file, Manufacturer, find_manufacturer};
-use clap::{Parser, Subcommand};
+use std::time::{
+    SystemTime, 
+    UNIX_EPOCH
+};
+use syxpack::{
+    Message, 
+    message_count, 
+    split_messages, 
+    read_file, 
+    Manufacturer, 
+    find_manufacturer
+};
+use clap::{
+    Parser, 
+    Subcommand
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -276,7 +292,12 @@ fn run_sections(file: &PathBuf) {
         );
 
         for section in sections {
-            println!("{:06X}: {} ({}, {} bytes)", section.offset, section.name, section.kind, section.length);
+            println!("{:06X}: {} ({}, {} {})", 
+                section.offset, 
+                section.name, 
+                section.kind, 
+                section.length,
+                if section.length == 1 { "byte" } else { "bytes" });
         }
     }
 }
