@@ -1,6 +1,6 @@
 [package]
 name = "syx"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Jere Käpyaho <2261936+jerekapyaho@users.noreply.github.com>"]
 license = "MIT"
@@ -10,6 +10,6 @@ Utility for processing MIDI System Exclusive files.
 repository = "https://github.com/coniferprod/syx"
 
 [dependencies]
-syxpack = "0.14.0"
-clap = { version = "4.3.21", features = ["derive"] }
+syxpack = "0.17.0"
+clap = { version = "4.5.20", features = ["derive"] }
 hex = "0.4.3"

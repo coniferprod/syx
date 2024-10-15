@@ -1,24 +1,26 @@
 use std::path::{
-    Path, 
+    Path,
     PathBuf
 };
 use std::fs;
-use std::io::Write;
+use std::io::{
+    Read,
+    Write
+};
 use std::fmt;
 use std::time::{
-    SystemTime, 
+    SystemTime,
     UNIX_EPOCH
 };
 use syxpack::{
-    Message, 
-    message_count, 
-    split_messages, 
-    read_file, 
-    Manufacturer, 
+    Message,
+    message_count,
+    split_messages,
+    Manufacturer,
     find_manufacturer
 };
 use clap::{
-    Parser, 
+    Parser,
     Subcommand
 };
 
@@ -27,6 +29,13 @@ use clap::{
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Default, Debug, Eq, PartialEq)]
+enum OutputFormat {
+    #[default]
+    Text,
+    Json,
 }
 
 #[derive(Subcommand)]
@@ -60,6 +69,8 @@ enum Commands {
         #[arg(short, long)]
         file: PathBuf,
 
+        #[arg(short, long)]
+        output: OutputFormat,
     },
 
     // Receive SysEx messages from stdin in the ReceiveMIDI format.
@@ -87,11 +98,28 @@ fn main() {
         Commands::Identify { file } => run_identify(file),
         Commands::Extract { infile, outfile } => run_extract(infile, outfile),
         Commands::Split { file, verbose } => run_split(file, *verbose),
-        Commands::Sections { file } => run_sections(file),
+        Commands::Sections { file, output } => run_sections(file, *output),
         Commands::Receive { } => run_receive(),
         Commands::Make { manufacturer, payload, outfile } => run_make(manufacturer, payload, outfile)
     }
 }
+
+fn read_file(name: &PathBuf) -> Option<Vec<u8>> {
+    match fs::File::open(&name) {
+        Ok(mut f) => {
+            let mut buffer = Vec::new();
+            match f.read_to_end(&mut buffer) {
+                Ok(_) => Some(buffer),
+                Err(_) => None
+            }
+        },
+        Err(_) => {
+            eprintln!("Unable to open file {}", &name.display());
+            None
+        }
+    }
+}
+
 
 fn run_identify(file: &PathBuf) {
     if let Some(buffer) = read_file(file) {
@@ -99,12 +127,12 @@ fn run_identify(file: &PathBuf) {
         let count = message_count(&buffer);
         if count >= 1 {
             if count == 1 {
-                all_messages.push(Message::new(&buffer).ok().unwrap());
+                all_messages.push(Message::from_bytes(&buffer).ok().unwrap());
             }
             else {
                 let messages = split_messages(buffer.to_vec());
                 for message in messages {
-                    all_messages.push(Message::new(&message).ok().unwrap());
+                    all_messages.push(Message::from_bytes(&message).ok().unwrap());
                 }
             }
         };
@@ -142,7 +170,7 @@ fn run_extract(infile: &PathBuf, outfile: &PathBuf) {
             println!("More than one System Exclusive message found in file. Please use `syx split` to separate them.");
         }
         else {
-            match Message::new(&buffer) {
+            match Message::from_bytes(&buffer) {
                 // At this point, the SysEx delimiters and the manufacturer byte(s)
                 // have already been stripped off. What's left is the payload.
                 // For example, if the original message was "F0 42 30 28 54 02 ... 5C F7",
@@ -219,14 +247,14 @@ struct MessageSection {
     length: usize,  // length of section in bytes
 }
 
-fn run_sections(file: &PathBuf) {
+fn run_sections(file: &PathBuf, output: OutputFormat) {
     if let Some(buffer) = read_file(file) {
         if message_count(&buffer) > 1 {
             println!("More than one System Exclusive message found in file. Please use `syx split` to separate them.");
             std::process::exit(1);
         }
 
-        let message = Message::new(&buffer);
+        let message = Message::from_bytes(&buffer);
         let mut offset = 0;
 
         let mut sections: Vec<MessageSection> = Vec::new();
@@ -291,13 +319,29 @@ fn run_sections(file: &PathBuf) {
             }
         );
 
+        if output == OutputFormat::Json {
+            println!("[");  // start array
+        }
+
         for section in sections {
-            println!("{:06X}: {} ({}, {} {})", 
-                section.offset, 
-                section.name, 
-                section.kind, 
-                section.length,
-                if section.length == 1 { "byte" } else { "bytes" });
+            match output {
+                OutputFormat::Text => {
+                    println!("{:06X}: {} ({}, {} {})",
+                    section.offset,
+                    section.name,
+                    section.kind,
+                    section.length,
+                    if section.length == 1 { "byte" } else { "bytes" });
+                },
+                OutputFormat::Json => {
+                    println!("    {{ \"offset\": {}, \"name\": \"{}\", \"kind\": \"{}\", \"length\": {} }}",
+                        section.offset, section.name, section.kind, section.length);
+                }
+            }
+        }
+
+        if output == OutputFormat::Json {
+            println!("]");  // end array
         }
     }
 }
@@ -387,7 +431,7 @@ fn run_make(manufacturer: &String, payload: &String, outfile: &PathBuf) {
             // Try to split it into a vector, so that we can make a SysEx message.
             match hex::decode(manufacturer) {
                 Ok(manuf_bytes) => {
-                    let manuf = Manufacturer::new(manuf_bytes).unwrap();
+                    let manuf = Manufacturer::from_bytes(&manuf_bytes).unwrap();
 
                     match hex::decode(payload) {
                         Ok(payload_bytes) => {
