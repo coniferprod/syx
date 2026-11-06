@@ -17,7 +17,8 @@ use syxpack::{
     message_count,
     split_messages,
     Manufacturer,
-    find_manufacturer
+    find_manufacturer,
+    SystemExclusiveData,
 };
 use clap::{
     Parser,
@@ -127,12 +128,12 @@ fn run_identify(file: &PathBuf) {
         let count = message_count(&buffer);
         if count >= 1 {
             if count == 1 {
-                all_messages.push(Message::from_bytes(&buffer).ok().unwrap());
+                all_messages.push(Message::parse(&buffer).ok().unwrap());
             }
             else {
                 let messages = split_messages(buffer.to_vec());
                 for message in messages {
-                    all_messages.push(Message::from_bytes(&message).ok().unwrap());
+                    all_messages.push(Message::parse(&message).ok().unwrap());
                 }
             }
         };
@@ -170,7 +171,7 @@ fn run_extract(infile: &PathBuf, outfile: &PathBuf) {
             println!("More than one System Exclusive message found in file. Please use `syx split` to separate them.");
         }
         else {
-            match Message::from_bytes(&buffer) {
+            match Message::parse(&buffer) {
                 // At this point, the SysEx delimiters and the manufacturer byte(s)
                 // have already been stripped off. What's left is the payload.
                 // For example, if the original message was "F0 42 30 28 54 02 ... 5C F7",
@@ -254,7 +255,7 @@ fn run_sections(file: &PathBuf, output: OutputFormat) {
             std::process::exit(1);
         }
 
-        let message = Message::from_bytes(&buffer);
+        let message = Message::parse(&buffer);
         let mut offset = 0;
 
         let mut sections: Vec<MessageSection> = Vec::new();
@@ -431,7 +432,7 @@ fn run_make(manufacturer: &String, payload: &String, outfile: &PathBuf) {
             // Try to split it into a vector, so that we can make a SysEx message.
             match hex::decode(manufacturer) {
                 Ok(manuf_bytes) => {
-                    let manuf = Manufacturer::from_bytes(&manuf_bytes).unwrap();
+                    let manuf = Manufacturer::parse(&manuf_bytes).unwrap();
 
                     match hex::decode(payload) {
                         Ok(payload_bytes) => {
